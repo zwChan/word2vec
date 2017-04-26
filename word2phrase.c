@@ -27,20 +27,24 @@ typedef float real;                    // Precision of float numbers
 struct vocab_word {
   long long cn;
   char *word;
+  int isPhrase;
 };
 
 char train_file[MAX_STRING], output_file[MAX_STRING];
+// the array of the vocabularies; always fill the array from beginning to end. no empty gap.
 struct vocab_word *vocab;
+// vocab_hash: hash(word) -> index of the word in vocab
 int debug_mode = 2, min_count = 5, *vocab_hash, min_reduce = 1;
 long long vocab_max_size = 10000, vocab_size = 0;
 long long train_words = 0;
 real threshold = 100;
+long long showNumber = 100;
 
 unsigned long long next_random = 1;
 
 // Reads a single word from a file, assuming space + tab + EOL to be word boundaries
 void ReadWord(char *word, FILE *fin) {
-  int a = 0, ch;
+  int a = 0, ch; // a is the position of the char in the current word; ch is the current char
   while (!feof(fin)) {
     ch = fgetc(fin);
     if (ch == 13) continue;
@@ -89,12 +93,13 @@ int ReadWordIndex(FILE *fin) {
 }
 
 // Adds a word to the vocabulary
-int AddWordToVocab(char *word) {
+int AddWordToVocab(char *word, int isPhrase) {
   unsigned int hash, length = strlen(word) + 1;
   if (length > MAX_STRING) length = MAX_STRING;
   vocab[vocab_size].word = (char *)calloc(length, sizeof(char));
   strcpy(vocab[vocab_size].word, word);
   vocab[vocab_size].cn = 0;
+  vocab[vocab_size].isPhrase = isPhrase;
   vocab_size++;
   // Reallocate memory if needed
   if (vocab_size + 2 >= vocab_max_size) {
@@ -107,12 +112,15 @@ int AddWordToVocab(char *word) {
   return vocab_size - 1;
 }
 
-// Used later for sorting by word counts
+// Used later for sorting by word counts; if ties, longer word first; if ties, compare the word
 int VocabCompare(const void *a, const void *b) {
-    return ((struct vocab_word *)b)->cn - ((struct vocab_word *)a)->cn;
+    int ret = ((struct vocab_word *)b)->cn - ((struct vocab_word *)a)->cn;
+    if (ret == 0) ret = strlen(((struct vocab_word *)b)->word) - strlen(((struct vocab_word *)a)->word);
+    if (ret == 0) ret = strcmp(((struct vocab_word *)a)->word, ((struct vocab_word *)b)->word);
+    return ret;
 }
 
-// Sorts the vocabulary by frequency using word counts
+// Sorts the vocabulary by frequency using word counts. </s> at the first.
 void SortVocab() {
   int a;
   unsigned int hash;
@@ -135,6 +143,7 @@ void SortVocab() {
 }
 
 // Reduces the vocabulary by removing infrequent tokens
+// every time call this function, the threshold to reduce will increase by 1. start from 1
 void ReduceVocab() {
   int a, b = 0;
   unsigned int hash;
@@ -166,7 +175,7 @@ void LearnVocabFromTrainFile() {
     exit(1);
   }
   vocab_size = 0;
-  AddWordToVocab((char *)"</s>");
+  AddWordToVocab((char *)"</s>", 0);
   while (1) {
     ReadWord(word, fin);
     if (feof(fin)) break;
@@ -181,7 +190,7 @@ void LearnVocabFromTrainFile() {
     }
     i = SearchVocab(word);
     if (i == -1) {
-      a = AddWordToVocab(word);
+      a = AddWordToVocab(word, 0);
       vocab[a].cn = 1;
     } else vocab[i].cn++;
     if (start) continue;
@@ -190,7 +199,7 @@ void LearnVocabFromTrainFile() {
     strcpy(last_word, word);
     i = SearchVocab(bigram_word);
     if (i == -1) {
-      a = AddWordToVocab(bigram_word);
+      a = AddWordToVocab(bigram_word, 1);
       vocab[a].cn = 1;
     } else vocab[i].cn++;
     if (vocab_size > vocab_hash_size * 0.7) ReduceVocab();
@@ -218,6 +227,8 @@ void TrainModel() {
     ReadWord(word, fin);
     if (feof(fin)) break;
     if (!strcmp(word, "</s>")) {
+      // if there is a stop word, we don't consider the adjacent words are phrase
+      pa = 0;
       fprintf(fo, "\n");
       continue;
     }
@@ -260,6 +271,17 @@ int ArgPos(char *str, int argc, char **argv) {
   return -1;
 }
 
+// show the phrase by frequency from high to low
+void showPhrase () {
+	long long i, showN = showNumber;
+	for (i=0; i < vocab_size; i++) {
+		if (showN == 0) break;
+		printf("%s\t%lld\n",vocab[i].word, vocab[i].cn);
+		if (showN > 0) showN--;
+	}
+	fflush(stdout);
+}
+
 int main(int argc, char **argv) {
   int i;
   if (argc == 1) {
@@ -274,6 +296,8 @@ int main(int argc, char **argv) {
     printf("\t\tThis will discard words that appear less than <int> times; default is 5\n");
     printf("\t-threshold <float>\n");
     printf("\t\t The <float> value represents threshold for forming the phrases (higher means less phrases); default 100\n");
+    printf("\t-showNumber <float>\n");
+    printf("\t\t The <int> value represents the number of phrase are printed, by frequency descent descendant; default 100\n");
     printf("\t-debug <int>\n");
     printf("\t\tSet the debug mode (default = 2 = more info during training)\n");
     printf("\nExamples:\n");
@@ -288,5 +312,6 @@ int main(int argc, char **argv) {
   vocab = (struct vocab_word *)calloc(vocab_max_size, sizeof(struct vocab_word));
   vocab_hash = (int *)calloc(vocab_hash_size, sizeof(int));
   TrainModel();
+  showPhrase();
   return 0;
 }
