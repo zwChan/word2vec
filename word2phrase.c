@@ -169,7 +169,10 @@ void LearnVocabFromTrainFile() {
   FILE *fin;
   long long a, i, start = 1;
   for (a = 0; a < vocab_hash_size; a++) vocab_hash[a] = -1;
-  fin = fopen(train_file, "rb");
+  if (!strcmp("-",train_file))
+    fin = stdin;
+  else
+    fin = fopen(train_file, "rb");  
   if (fin == NULL) {
     printf("ERROR: training data file not found!\n");
     exit(1);
@@ -219,7 +222,10 @@ void TrainModel() {
   FILE *fo, *fin;
   printf("Starting training using file %s\n", train_file);
   LearnVocabFromTrainFile();
-  fin = fopen(train_file, "rb");
+  if (!strcmp("-",train_file))
+    fin = stdin;
+  else
+    fin = fopen(train_file, "rb");
   fo = fopen(output_file, "wb");
   word[0] = 0;
   while (1) {
@@ -289,7 +295,7 @@ int main(int argc, char **argv) {
     printf("Options:\n");
     printf("Parameters for training:\n");
     printf("\t-train <file>\n");
-    printf("\t\tUse text data from <file> to train the model\n");
+    printf("\t\tUse text data from <file> to train the model; '-' means stdin, for pipeline.\n");
     printf("\t-output <file>\n");
     printf("\t\tUse <file> to save the resulting word vectors / word clusters / phrases\n");
     printf("\t-min-count <int>\n");
