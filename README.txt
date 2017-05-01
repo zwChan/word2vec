@@ -25,3 +25,4 @@ More information about the scripts is provided at https://code.google.com/p/word
 ## Modification: 
 -  Used later for sorting by word counts; if ties, longer word first; if ties, compare the word
 -  if there is a stop word, we don't consider the adjacent words are phrase
+-  show phrase at the end

@@ -390,6 +390,7 @@ void *TrainModelThread(void *id) {
         if (feof(fi)) break;
         if (word == -1) continue;
         word_count++;
+        // word==0 means the stop word '</s>'. then stop the sentence.
         if (word == 0) break;
         // The subsampling randomly discards frequent words while keeping the ranking same
         if (sample > 0) {
